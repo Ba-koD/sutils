@@ -1,0 +1,8 @@
+<metadata>
+    <directory>stat_utils</directory>
+    <name>Stat Utils</name>
+    <id>stat_utils_lib</id>
+    <description>Standalone stat multiplier management and HUD display library for Isaac mods. Provides unified multiplier/addition tracking per player per item, HUD overlay, and vanilla multiplier tables.</description>
+    <version>1.0.0</version>
+    <visibility>Private</visibility>
+</metadata>
