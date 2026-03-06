@@ -1351,6 +1351,17 @@ local function HasActiveCustomContribution(player, statType)
     return false
 end
 
+local function GetVanillaDisplayChangeMultiplier(previousTotal, currentTotal)
+    local prev = type(previousTotal) == "number" and previousTotal or 1.0
+    local current = type(currentTotal) == "number" and currentTotal or 1.0
+
+    if math.abs(prev) <= 0.00001 then
+        return current
+    end
+
+    return current / prev
+end
+
 local function SyncVanillaOnlyDisplayData(player, data)
     if not player or type(data) ~= "table" then
         return false
@@ -1383,12 +1394,19 @@ local function SyncVanillaOnlyDisplayData(player, data)
         local shouldShowVanillaOnly = trackingEnabled and vanillaMult ~= 1.0 and not hasActiveCustom
 
         if shouldShowVanillaOnly then
+            local currentDisplay = vanillaMult
+            if math.abs(vanillaMult - prevVanillaMult) > 0.00001 then
+                currentDisplay = GetVanillaDisplayChangeMultiplier(prevVanillaMult, vanillaMult)
+            elseif type(existing) == "table" and type(existing.current) == "number" then
+                currentDisplay = existing.current
+            end
+
             local prevCurrent = type(existing) == "table" and existing.current or nil
-            if type(prevCurrent) ~= "number" or math.abs(prevCurrent - vanillaMult) > 0.00001 then
+            if type(prevCurrent) ~= "number" or math.abs(prevCurrent - currentDisplay) > 0.00001 then
                 changed = true
             end
             data.unifiedData[statType] = {
-                current = vanillaMult,
+                current = currentDisplay,
                 -- Keep this as pure apply value (x1.00). Live vanilla multiplier gets
                 -- merged in GetLiveDisplayTotalMultiplier().
                 total = 1.0,
