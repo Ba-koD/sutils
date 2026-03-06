@@ -1448,47 +1448,96 @@ local function GetLiveDisplayCurrent(player, statType, fallbackCurrent, fallback
     return fallbackCurrent, fallbackType
 end
 
+local function NormalizeHUDDisplayMode(mode)
+    if type(mode) ~= "string" then
+        return "both"
+    end
+    local lowered = string.lower(mode)
+    if lowered == "last"
+        or lowered == "current"
+        or lowered == "recent"
+        or lowered == "last_multiplier" then
+        return "last"
+    elseif lowered == "final"
+        or lowered == "total"
+        or lowered == "final_multiplier"
+        or lowered == "total_multiplier" then
+        return "final"
+    elseif lowered == "both" or lowered == "all" then
+        return "both"
+    end
+    return "both"
+end
+
+local function GetHUDDisplayMode()
+    if StatsAPI and type(StatsAPI.GetDisplayMode) == "function" then
+        return NormalizeHUDDisplayMode(StatsAPI:GetDisplayMode())
+    end
+    if StatsAPI and type(StatsAPI.settings) == "table" then
+        return NormalizeHUDDisplayMode(StatsAPI.settings.displayMode)
+    end
+    return "both"
+end
+
 -- Render a single multiplier stat
-local function RenderMultiplierStat(statType, currentValue, totalMult, currentType, pos, alpha)
+local function RenderMultiplierStat(statType, currentValue, totalMult, currentType, pos, alpha, displayMode)
     if type(currentValue) ~= "number" or type(totalMult) ~= "number" then
         StatsAPI.printError(string.format("RenderMultiplierStat: currentValue and totalMult must be numbers, got %s and %s",
             type(currentValue), type(totalMult)))
         return
     end
 
-    local currentText
     if currentType == "addition" then
         return
-    elseif currentType == "add_mult" or currentType == "remove_mult" then
-        currentText = string.format("%+0.2f", currentValue)
-    else
-        currentText = string.format("x%.2f", currentValue)
     end
+
+    local renderMode = NormalizeHUDDisplayMode(displayMode)
+    local showCurrent = renderMode ~= "final"
+    local showTotal = renderMode ~= "last"
+    local currentText = nil
+    if showCurrent then
+        if currentType == "add_mult" or currentType == "remove_mult" then
+            currentText = string.format("%+0.2f", currentValue)
+        else
+            currentText = string.format("x%.2f", currentValue)
+        end
+    end
+
     local totalValue = nil
-    if currentType ~= "addition" then
-        totalValue = string.format("/x%.2f", totalMult)
-    end
-
-    local currentColor
-    if currentType == "addition" or currentType == "add_mult" or currentType == "remove_mult" then
-        if currentValue > 0 then
-            currentColor = KColor(0/255, 255/255, 0/255, alpha)
-        elseif currentValue < 0 then
-            currentColor = KColor(255/255, 0/255, 0/255, alpha)
+    if showTotal then
+        if showCurrent and currentText ~= nil then
+            totalValue = string.format("/x%.2f", totalMult)
         else
-            currentColor = KColor(255/255, 255/255, 255/255, alpha)
-        end
-    else
-        if currentValue > 1.0 then
-            currentColor = KColor(0/255, 255/255, 0/255, alpha)
-        elseif currentValue == 1.0 then
-            currentColor = KColor(255/255, 255/255, 255/255, alpha)
-        else
-            currentColor = KColor(255/255, 0/255, 0/255, alpha)
+            totalValue = string.format("x%.2f", totalMult)
         end
     end
 
-    local totalColor
+    if currentText == nil and totalValue == nil then
+        return
+    end
+
+    local currentColor = nil
+    if currentText ~= nil then
+        if currentType == "addition" or currentType == "add_mult" or currentType == "remove_mult" then
+            if currentValue > 0 then
+                currentColor = KColor(0/255, 255/255, 0/255, alpha)
+            elseif currentValue < 0 then
+                currentColor = KColor(255/255, 0/255, 0/255, alpha)
+            else
+                currentColor = KColor(255/255, 255/255, 255/255, alpha)
+            end
+        else
+            if currentValue > 1.0 then
+                currentColor = KColor(0/255, 255/255, 0/255, alpha)
+            elseif currentValue == 1.0 then
+                currentColor = KColor(255/255, 255/255, 255/255, alpha)
+            else
+                currentColor = KColor(255/255, 0/255, 0/255, alpha)
+            end
+        end
+    end
+
+    local totalColor = nil
     if totalValue ~= nil then
         if totalMult > 1.0 then
             totalColor = KColor(100/255, 150/255, 255/255, alpha)
@@ -1499,19 +1548,24 @@ local function RenderMultiplierStat(statType, currentValue, totalMult, currentTy
         end
     end
 
-    StatsFont:DrawString(
-        currentText,
-        pos.X,
-        pos.Y,
-        currentColor,
-        0,
-        true
-    )
+    if currentText ~= nil then
+        StatsFont:DrawString(
+            currentText,
+            pos.X,
+            pos.Y,
+            currentColor,
+            0,
+            true
+        )
+    end
 
     if totalValue ~= nil then
-        local currentTextWidth = StatsFont:GetStringWidth(currentText)
-        local gap = 2
-        local totalX = pos.X + currentTextWidth + gap
+        local totalX = pos.X
+        if currentText ~= nil then
+            local currentTextWidth = StatsFont:GetStringWidth(currentText)
+            local gap = 2
+            totalX = pos.X + currentTextWidth + gap
+        end
 
         StatsFont:DrawString(
             totalValue,
@@ -1645,6 +1699,7 @@ function StatsAPI.stats.multiplierDisplay:RenderPlayer(player, renderIndex, hasB
     local hudRelativeOffset = GetHUDRelativeDisplayOffset()
     local screenShakeOffset = Game().ScreenShakeOffset
     local sharedStatTextOffsetX = GetSharedStatTextOffsetX(player)
+    local renderMode = GetHUDDisplayMode()
 
     for statType, multiplierData in pairs(data.unifiedData) do
         local statPos = GetStatBasePosition(statType)
@@ -1660,7 +1715,7 @@ function StatsAPI.stats.multiplierDisplay:RenderPlayer(player, renderIndex, hasB
                 multiplierData.currentType
             )
 
-            RenderMultiplierStat(statType, currentDisplay, totalDisplay, currentTypeDisplay, pos, alpha)
+            RenderMultiplierStat(statType, currentDisplay, totalDisplay, currentTypeDisplay, pos, alpha, renderMode)
         end
     end
 end

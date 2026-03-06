@@ -1,6 +1,31 @@
 local M = {}
 local OFFSET_MIN = -200
 local OFFSET_MAX = 200
+local DISPLAY_MODE_LAST = "last"
+local DISPLAY_MODE_FINAL = "final"
+local DISPLAY_MODE_BOTH = "both"
+local DISPLAY_MODE_MIN_INDEX = 0
+local DISPLAY_MODE_MAX_INDEX = 2
+local DISPLAY_MODE_BY_INDEX = {
+    [0] = DISPLAY_MODE_LAST,
+    [1] = DISPLAY_MODE_FINAL,
+    [2] = DISPLAY_MODE_BOTH
+}
+local DISPLAY_MODE_INDEX_BY_MODE = {
+    [DISPLAY_MODE_LAST] = 0,
+    [DISPLAY_MODE_FINAL] = 1,
+    [DISPLAY_MODE_BOTH] = 2
+}
+local DISPLAY_MODE_LABELS = {
+    [DISPLAY_MODE_LAST] = "Last Multiplier",
+    [DISPLAY_MODE_FINAL] = "Final Multiplier",
+    [DISPLAY_MODE_BOTH] = "Both"
+}
+local DISPLAY_MODE_SCROLL_VALUE_BY_MODE = {
+    [DISPLAY_MODE_LAST] = 0,
+    [DISPLAY_MODE_FINAL] = 5,
+    [DISPLAY_MODE_BOTH] = 10
+}
 
 local function clampOffset(value)
     local num = tonumber(value) or 0
@@ -17,6 +42,55 @@ local function clampOffset(value)
     return num
 end
 
+local function normalizeDisplayMode(value)
+    if type(value) == "number" then
+        local rounded = nil
+        if value >= 0 then
+            rounded = math.floor(value + 0.5)
+        else
+            rounded = math.ceil(value - 0.5)
+        end
+        if rounded < 0 then
+            rounded = 0
+        elseif rounded > 10 then
+            rounded = 10
+        end
+
+        -- NUMBER mode: exact 0/1/2
+        if rounded >= DISPLAY_MODE_MIN_INDEX and rounded <= DISPLAY_MODE_MAX_INDEX then
+            return DISPLAY_MODE_BY_INDEX[rounded] or DISPLAY_MODE_BOTH
+        end
+
+        -- SCROLL mode fallback (0~10): bucket into 3 states.
+        if rounded <= 3 then
+            return DISPLAY_MODE_LAST
+        elseif rounded <= 7 then
+            return DISPLAY_MODE_FINAL
+        end
+        return DISPLAY_MODE_BOTH
+    end
+
+    if type(value) == "string" then
+        local mode = string.lower(value)
+        if mode == DISPLAY_MODE_LAST
+            or mode == "current"
+            or mode == "last_multiplier"
+            or mode == "recent" then
+            return DISPLAY_MODE_LAST
+        elseif mode == DISPLAY_MODE_FINAL
+            or mode == "total"
+            or mode == "final_multiplier"
+            or mode == "total_multiplier" then
+            return DISPLAY_MODE_FINAL
+        elseif mode == DISPLAY_MODE_BOTH
+            or mode == "all" then
+            return DISPLAY_MODE_BOTH
+        end
+    end
+
+    return DISPLAY_MODE_BOTH
+end
+
 local function ensureSettingsTable()
     if not StatsAPI then
         return nil
@@ -27,13 +101,17 @@ local function ensureSettingsTable()
             displayOffsetX = 0,
             displayOffsetY = 0,
             trackVanillaDisplay = true,
-            debugEnabled = false
+            debugEnabled = false,
+            displayMode = DISPLAY_MODE_BOTH
         }
     elseif StatsAPI.settings.trackVanillaDisplay == nil then
         StatsAPI.settings.trackVanillaDisplay = true
     end
     if StatsAPI.settings.debugEnabled == nil then
         StatsAPI.settings.debugEnabled = false
+    end
+    if StatsAPI.settings.displayMode == nil then
+        StatsAPI.settings.displayMode = DISPLAY_MODE_BOTH
     end
     return StatsAPI.settings
 end
@@ -64,11 +142,13 @@ local function resetDisplayDefaults()
 
     local previousTrackVanilla = settings.trackVanillaDisplay
     local previousDebugEnabled = settings.debugEnabled == true
+    local previousDisplayMode = normalizeDisplayMode(settings.displayMode)
     settings.displayEnabled = true
     settings.displayOffsetX = 0
     settings.displayOffsetY = 0
     settings.trackVanillaDisplay = true
     settings.debugEnabled = false
+    settings.displayMode = DISPLAY_MODE_BOTH
 
     if previousTrackVanilla ~= true
         and StatsAPI
@@ -82,6 +162,12 @@ local function resetDisplayDefaults()
         StatsAPI:SetDebugModeEnabled(false)
     elseif StatsAPI then
         StatsAPI.DEBUG = false
+    end
+
+    if previousDisplayMode ~= DISPLAY_MODE_BOTH
+        and StatsAPI
+        and type(StatsAPI.SetDisplayMode) == "function" then
+        StatsAPI:SetDisplayMode(DISPLAY_MODE_BOTH)
     end
 
     if StatsAPI and StatsAPI.stats and StatsAPI.stats.multiplierDisplay
@@ -152,10 +238,64 @@ local function getDisplayOffsetY()
     return 0
 end
 
+local function getDisplayMode()
+    if StatsAPI and type(StatsAPI.GetDisplayMode) == "function" then
+        return normalizeDisplayMode(StatsAPI:GetDisplayMode())
+    end
+    local settings = ensureSettingsTable()
+    if settings then
+        return normalizeDisplayMode(settings.displayMode)
+    end
+    return DISPLAY_MODE_BOTH
+end
+
+local function getDisplayModeIndex()
+    local mode = getDisplayMode()
+    return DISPLAY_MODE_INDEX_BY_MODE[mode] or DISPLAY_MODE_INDEX_BY_MODE[DISPLAY_MODE_BOTH]
+end
+
+local function getDisplayModeScrollValue()
+    local mode = getDisplayMode()
+    return DISPLAY_MODE_SCROLL_VALUE_BY_MODE[mode] or DISPLAY_MODE_SCROLL_VALUE_BY_MODE[DISPLAY_MODE_BOTH]
+end
+
+local function setDisplayMode(value)
+    local mode = normalizeDisplayMode(value)
+    if StatsAPI and type(StatsAPI.SetDisplayMode) == "function" then
+        StatsAPI:SetDisplayMode(mode)
+        return
+    end
+
+    local settings = ensureSettingsTable()
+    if not settings then
+        return
+    end
+
+    if settings.displayMode == mode then
+        return
+    end
+    settings.displayMode = mode
+
+    if StatsAPI and StatsAPI.stats and StatsAPI.stats.multiplierDisplay
+        and type(StatsAPI.stats.multiplierDisplay.RefreshAllFromUnified) == "function" then
+        StatsAPI.stats.multiplierDisplay:RefreshAllFromUnified()
+    end
+    if StatsAPI and type(StatsAPI.SaveRunData) == "function" then
+        StatsAPI:SaveRunData()
+    end
+end
+
 function M.Setup()
     if not hasMCM() then
         return false
     end
+
+    local hasNumberOption = ModConfigMenu.OptionType.NUMBER ~= nil
+    local hasScrollOption = ModConfigMenu.OptionType.SCROLL ~= nil
+    if not hasNumberOption and not hasScrollOption then
+        return false
+    end
+    local modeOptionType = hasNumberOption and ModConfigMenu.OptionType.NUMBER or ModConfigMenu.OptionType.SCROLL
 
     local category = "StatsAPI"
     local subcategory = "Display"
@@ -259,6 +399,35 @@ function M.Setup()
         end
     })
 
+    local modeSetting = {
+        Type = modeOptionType,
+        CurrentSetting = function()
+            if modeOptionType == ModConfigMenu.OptionType.NUMBER then
+                return getDisplayModeIndex()
+            end
+            return getDisplayModeScrollValue()
+        end,
+        Display = function()
+            local mode = getDisplayMode()
+            local label = DISPLAY_MODE_LABELS[mode] or DISPLAY_MODE_LABELS[DISPLAY_MODE_BOTH]
+            return "HUD Display Mode: " .. label
+        end,
+        Info = {
+            "Choose what to render on stat multiplier HUD text.",
+            "Last Multiplier: show only latest changed multiplier.",
+            "Final Multiplier: show only final combined multiplier.",
+            "Both: show latest/final together (default)."
+        },
+        OnChange = function(value)
+            setDisplayMode(value)
+        end
+    }
+    if modeOptionType == ModConfigMenu.OptionType.NUMBER then
+        modeSetting.Minimum = DISPLAY_MODE_MIN_INDEX
+        modeSetting.Maximum = DISPLAY_MODE_MAX_INDEX
+    end
+    ModConfigMenu.AddSetting(category, subcategory, modeSetting)
+
     if ModConfigMenu.OptionType.NUMBER ~= nil then
         ModConfigMenu.AddSetting(category, subcategory, {
             Type = ModConfigMenu.OptionType.NUMBER,
@@ -312,7 +481,7 @@ function M.Setup()
         end,
         Info = {
             "Reset Multiplier HUD to defaults:",
-            "Display ON, Track Vanilla ON, Debug OFF, Offset X 0, Offset Y 0."
+            "Display ON, Mode BOTH, Track Vanilla ON, Debug OFF, Offset X 0, Offset Y 0."
         },
         OnChange = function(value)
             if value then

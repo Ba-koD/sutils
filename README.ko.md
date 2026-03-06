@@ -200,7 +200,7 @@ um:SetItemMultiplierDisabled(player, ITEM_KEY, "Damage", false)
 - `SetItemAddition`, `SetItemAdditiveMultiplier`는 누적형이라 반복 호출 시 계속 누적됩니다.
 - `SetItemMultiplierDisabled`는 multiplier(`SetItemMultiplier`)에만 적용됩니다.
 - `disabled` 상태는 저장/불러오기 시 유지됩니다.
-- Mod Config Menu가 설치되어 있으면 `StatsAPI > Display > Multiplier HUD`에서 표시 ON/OFF가 가능합니다.
+- Mod Config Menu가 설치되어 있으면 `StatsAPI > Display > Multiplier HUD`에서 표시 ON/OFF, `HUD Display Mode`에서 `Last Multiplier / Final Multiplier / Both` 선택이 가능합니다.
 - HUD 위치는 Isaac `Options.HUDOffset`을 따라가며, `StatsAPI > Display > HUD Offset X/Y`로 추가 미세 조정할 수 있습니다.
 - `RemoveItemAddition`은 addition만 지우는 함수가 아니라 additive multiplier도 같이 지웁니다.
 - `statType` 오타/대소문자 불일치는 적용되지 않습니다.

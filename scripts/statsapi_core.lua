@@ -28,12 +28,16 @@ end
 StatsAPI.mod = mod
 StatsAPI.VERSION = "1.0.0"
 StatsAPI.DEBUG = StatsAPI.DEBUG == true
+local DISPLAY_MODE_LAST = "last"
+local DISPLAY_MODE_FINAL = "final"
+local DISPLAY_MODE_BOTH = "both"
 StatsAPI.DEFAULT_SETTINGS = {
     displayEnabled = true,
     displayOffsetX = 0,
     displayOffsetY = 0,
     trackVanillaDisplay = true,
-    debugEnabled = false
+    debugEnabled = false,
+    displayMode = DISPLAY_MODE_BOTH
 }
 if type(StatsAPI.settings) ~= "table" then
     StatsAPI.settings = {
@@ -41,7 +45,8 @@ if type(StatsAPI.settings) ~= "table" then
         displayOffsetX = 0,
         displayOffsetY = 0,
         trackVanillaDisplay = true,
-        debugEnabled = false
+        debugEnabled = false,
+        displayMode = DISPLAY_MODE_BOTH
     }
 end
 if StatsAPI.DEBUG then
@@ -257,6 +262,59 @@ local function _consumeRuntimeQueue(modRef)
     return queue
 end
 
+local function normalizeDisplayMode(value, defaultValue)
+    local fallback = defaultValue or DISPLAY_MODE_BOTH
+    if type(fallback) ~= "string" then
+        fallback = DISPLAY_MODE_BOTH
+    end
+    fallback = string.lower(fallback)
+    if fallback ~= DISPLAY_MODE_LAST
+        and fallback ~= DISPLAY_MODE_FINAL
+        and fallback ~= DISPLAY_MODE_BOTH then
+        fallback = DISPLAY_MODE_BOTH
+    end
+
+    if type(value) == "number" then
+        local rounded = nil
+        if value >= 0 then
+            rounded = math.floor(value + 0.5)
+        else
+            rounded = math.ceil(value - 0.5)
+        end
+
+        if rounded == 0 then
+            return DISPLAY_MODE_LAST
+        elseif rounded == 1 then
+            return DISPLAY_MODE_FINAL
+        elseif rounded == 2 then
+            return DISPLAY_MODE_BOTH
+        end
+        return fallback
+    end
+
+    if type(value) ~= "string" then
+        return fallback
+    end
+
+    local mode = string.lower(value)
+    if mode == DISPLAY_MODE_LAST
+        or mode == "current"
+        or mode == "recent"
+        or mode == "last_multiplier" then
+        return DISPLAY_MODE_LAST
+    elseif mode == DISPLAY_MODE_FINAL
+        or mode == "total"
+        or mode == "final_multiplier"
+        or mode == "total_multiplier" then
+        return DISPLAY_MODE_FINAL
+    elseif mode == DISPLAY_MODE_BOTH
+        or mode == "all" then
+        return DISPLAY_MODE_BOTH
+    end
+
+    return fallback
+end
+
 _normalizeSettings = function(rawSettings)
     local function clampNumber(value, minValue, maxValue)
         if value < minValue then
@@ -315,7 +373,8 @@ _normalizeSettings = function(rawSettings)
         displayOffsetX = 0,
         displayOffsetY = 0,
         trackVanillaDisplay = true,
-        debugEnabled = false
+        debugEnabled = false,
+        displayMode = DISPLAY_MODE_BOTH
     }
     if type(rawSettings) == "table" then
         normalized.displayEnabled = toBoolean(rawSettings.displayEnabled, true)
@@ -323,6 +382,7 @@ _normalizeSettings = function(rawSettings)
         normalized.displayOffsetY = toInteger(rawSettings.displayOffsetY, 0, -200, 200)
         normalized.trackVanillaDisplay = toBoolean(rawSettings.trackVanillaDisplay, true)
         normalized.debugEnabled = toBoolean(rawSettings.debugEnabled, false)
+        normalized.displayMode = normalizeDisplayMode(rawSettings.displayMode, DISPLAY_MODE_BOTH)
     end
     return normalized
 end
@@ -397,6 +457,39 @@ end
 
 function StatsAPI:GetDisplayOffsets()
     return self:GetDisplayOffsetX(), self:GetDisplayOffsetY()
+end
+
+function StatsAPI:GetDisplayMode()
+    if type(self.settings) ~= "table" then
+        self.settings = _normalizeSettings(nil)
+    end
+    local mode = normalizeDisplayMode(self.settings.displayMode, DISPLAY_MODE_BOTH)
+    if self.settings.displayMode ~= mode then
+        self.settings.displayMode = mode
+    end
+    return mode
+end
+
+function StatsAPI:SetDisplayMode(mode)
+    if type(self.settings) ~= "table" then
+        self.settings = _normalizeSettings(nil)
+    end
+
+    local target = normalizeDisplayMode(mode, DISPLAY_MODE_BOTH)
+    if self.settings.displayMode == target then
+        return
+    end
+
+    self.settings.displayMode = target
+
+    if self.stats
+        and self.stats.multiplierDisplay
+        and type(self.stats.multiplierDisplay.RefreshAllFromUnified) == "function" then
+        self.stats.multiplierDisplay:RefreshAllFromUnified()
+    end
+
+    StatsAPI.print("HUD multiplier display mode: " .. target)
+    self:SaveRunData()
 end
 
 function StatsAPI:IsVanillaDisplayTrackingEnabled()
@@ -519,7 +612,9 @@ function StatsAPI:SetDisplayOffsets(offsetX, offsetY)
         displayEnabled = self.settings.displayEnabled,
         displayOffsetX = offsetX,
         displayOffsetY = offsetY,
-        trackVanillaDisplay = self.settings.trackVanillaDisplay
+        trackVanillaDisplay = self.settings.trackVanillaDisplay,
+        debugEnabled = self.settings.debugEnabled,
+        displayMode = self.settings.displayMode
     })
 
     local changed = false
