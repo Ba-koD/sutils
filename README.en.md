@@ -102,6 +102,8 @@ um:SetItemMultiplierDisabled(player, ITEM_KEY, "Damage", false)
 
 - `SetItemMultiplier(player, itemID, statType, multiplier, description)`
   - Register/update multiplicative value (overwrite)
+- `MultiplyItemMultiplier(player, itemID, statType, factor, description)`
+  - Multiply and accumulate on the existing multiplier (`1.0 * factor` if missing)
 - `SetItemAddition(player, itemID, statType, addition, description)`
   - Register additive value (cumulative)
 - `SetItemAdditiveMultiplier(player, itemID, statType, multiplierValue, description)`
@@ -159,6 +161,8 @@ Final formula: `(base + add_u) * mult_u * mult_p + add_p`
 
 - `playerMultipliers:SetMultiplier(player, sourceKey, statType, multiplier, description)`
   - Register/overwrite multiplier. Safe to call repeatedly in `MC_EVALUATE_CACHE`.
+- `playerMultipliers:MultiplyMultiplier(player, sourceKey, statType, factor, description)`
+  - Multiply and accumulate on the existing multiplier (`1.0 * factor` if missing)
 - `playerMultipliers:SetAddition(player, sourceKey, statType, addition, description)`
   - Cumulative addition. Re-calling with the same `sourceKey+statType` keeps accumulating.
 - `playerMultipliers:SetAdditiveMultiplier(player, sourceKey, statType, multiplierValue, description)`

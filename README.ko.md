@@ -102,6 +102,8 @@ um:SetItemMultiplierDisabled(player, ITEM_KEY, "Damage", false)
 
 - `SetItemMultiplier(player, itemID, statType, multiplier, description)`
   - 곱셈 배율 등록/갱신 (덮어쓰기)
+- `MultiplyItemMultiplier(player, itemID, statType, factor, description)`
+  - 기존 배율에 `factor`를 곱해 누적 (없으면 `1.0 * factor`)
 - `SetItemAddition(player, itemID, statType, addition, description)`
   - 덧셈 등록 (누적)
 - `SetItemAdditiveMultiplier(player, itemID, statType, multiplierValue, description)`
@@ -162,6 +164,8 @@ um:SetItemMultiplierDisabled(player, ITEM_KEY, "Damage", false)
 
 - `playerMultipliers:SetMultiplier(player, sourceKey, statType, multiplier, description)`
   - 배율 등록/덮어쓰기. `MC_EVALUATE_CACHE`에서 반복 호출해도 안전.
+- `playerMultipliers:MultiplyMultiplier(player, sourceKey, statType, factor, description)`
+  - 기존 배율에 `factor`를 곱해 누적 (없으면 `1.0 * factor`)
 - `playerMultipliers:SetAddition(player, sourceKey, statType, addition, description)`
   - 덧셈 누적. 같은 `sourceKey+statType` 재호출 시 값이 더해짐.
 - `playerMultipliers:SetAdditiveMultiplier(player, sourceKey, statType, multiplierValue, description)`

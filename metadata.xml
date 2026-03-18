@@ -13,7 +13,7 @@ Isaac base item stat multipliers are also supported, but not fully yet.
 마지막 배수 / 최종 배수 형태로 표시됩니다.
 
 아이작 기본 아이템 스탯 배수도 지원하지만 아직 완전히 지원하지 않습니다.</description>
-    <version>1.0.3</version>
+    <version>1.0.4</version>
     <visibility>Public</visibility>
     <tag id="Lua"/>
 </metadata>
